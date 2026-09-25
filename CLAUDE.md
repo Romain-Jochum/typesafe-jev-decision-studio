@@ -48,6 +48,14 @@ Before any public release, execute:
 
 ---
 
+## 6. Machine-Readable LLM Specifications
+
+- [`llms.txt`](llms.txt): Curated summary and index for AI agents following the [llmstxt.org](https://llmstxt.org) specification.
+- [`llms-full.txt`](llms-full.txt): Consolidated technical specification, API contracts, transfer curves, and agentic workflows.
+- [`.cursorrules`](.cursorrules): Project-level coding conventions for Cursor AI assistant.
+
+---
+
 ## Commands
 
 ```bash

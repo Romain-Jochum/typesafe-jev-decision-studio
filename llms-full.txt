@@ -1,0 +1,317 @@
+# TypeSafe Jev Decision Studio — Full Technical Specification
+
+> Comprehensive reference documentation for TypeSafe Jev (`typesafe/jev-1.13`) decision platform, Next.js 15 studio architecture, mathematical transfer curves, API contracts, and autonomous agent workflows.
+
+---
+
+## 1. Architectural Philosophy: System One vs Autoregressive Decisions
+
+Standard Large Language Models (LLMs) operate autoregressively: they generate text token by token. While effective for open-ended synthesis and prose, applying autoregressive models to classification and decision-making introduces significant operational challenges:
+
+1. **Inference Latency**: Generating 50–200 tokens takes 1,000ms–4,000ms, too slow for high-throughput ingestion pipelines, real-time routing, or fast autonomous agent execution loops.
+2. **Hallucination & Formatting Failures**: Even with structured outputs (JSON schema / tool calls), models can select invalid categories or produce subtle schema parsing errors requiring retry loops.
+3. **Uncalibrated Confidence**: Post-hoc softmax scores or token probabilities from generative models often suffer from poor calibration, misrepresenting actual empirical probabilities.
+
+**TypeSafe Jev (`typesafe/jev-1.13`)** is designed specifically for **System One automated decision-making**:
+- **Direct Logprob Scoring**: Directly evaluates candidate outcomes at the token distribution level in a single forward pass without autoregressive text generation.
+- **Sub-Second Performance**: Complete evaluation returns in 400–600ms via OpenRouter inference.
+- **Mathematical Probability Distributions**: Returns well-calibrated confidence scores across all candidates, enabling deterministic downstream thresholding and branch routing.
+- **Strict Typing**: Zero regex scraping or JSON repairing needed; natively typed contracts.
+
+---
+
+## 2. Decision Primitives
+
+### 2.1. Choice (Multi-Class Categorization)
+
+Selects the single most probable candidate from an arbitrary list of possibilities with calibrated confidence. Evaluates across large candidate sets (tested with 95+ options simultaneously) in a single request.
+
+#### Request Format:
+```json
+{
+  "state": "personal organization, to-do tracker, markdown note-taking app",
+  "questions": {
+    "category": {
+      "type": "choice",
+      "instructions": "What is the most probable folder to contain self-hosted projects about this topic?",
+      "criteria": {
+        "Analytics": null,
+        "Calendar & Contacts": null,
+        "Task Management & To-do Lists": null,
+        "Note Taking & Editors": null,
+        "Media Streaming": null
+      }
+    }
+  }
+}
+```
+
+#### Normalized Response:
+```json
+{
+  "model": "typesafe/jev-1.13",
+  "latencyMs": 485,
+  "answers": {
+    "category": {
+      "type": "choice",
+      "choice": "Note Taking & Editors",
+      "confidence": 0.842,
+      "probabilities": {
+        "Note Taking & Editors": 0.842,
+        "Task Management & To-do Lists": 0.154,
+        "Calendar & Contacts": 0.003,
+        "Analytics": 0.001,
+        "Media Streaming": 0.000
+      },
+      "rankedOptions": [
+        { "option": "Note Taking & Editors", "probability": 0.842, "percentage": "84.2%", "isWinner": true },
+        { "option": "Task Management & To-do Lists", "probability": 0.154, "percentage": "15.4%", "isWinner": false },
+        { "option": "Calendar & Contacts", "probability": 0.003, "percentage": "0.3%", "isWinner": false },
+        { "option": "Analytics", "probability": 0.001, "percentage": "0.1%", "isWinner": false },
+        { "option": "Media Streaming", "probability": 0.000, "percentage": "0.0%", "isWinner": false }
+      ]
+    }
+  }
+}
+```
+
+---
+
+### 2.2. Noul (Calibrated Binary Probability & Transfer Curves)
+
+Calculates the raw conditional probability $p(\text{yes}) \in [0.0, 1.0]$ for a binary proposition against criteria instructions.
+
+Because real-world applications have differing risk tolerances (e.g., medical triage vs content recommendations), the decision engine supports **4 mathematical probability transfer curves**:
+
+$$\text{Verdict} = f(p) \ge \text{Threshold}$$
+
+| Curve | Identifier | Formula | Operational Characteristics |
+| :--- | :--- | :--- | :--- |
+| **Linear** | `linear` | $f(p) = p$ | Direct unweighted probability mapping. Best for neutral or unbiased probability estimation. |
+| **Sigmoid** | `sigmoid` | $f(p) = \frac{1}{1 + e^{-10(p - 0.5)}}$ | Sharp S-curve emphasizing confident decisions. Suppresses borderline ambiguity (pushes $p > 0.6 \to 1.0$, $p < 0.4 \to 0.0$). |
+| **Strict** | `strict` | $f(p) = p^{1.8}$ | Conservative power curve penalizing uncertainty. Ideal for safety-critical or high-risk actions where false positives are costly. |
+| **Permissive** | `permissive` | $f(p) = p^{0.55}$ | Lenient curve boosting edge-case recall. Ideal for lead generation, candidate discovery, or screening where false negatives are costly. |
+
+#### Request Format:
+```json
+{
+  "state": "User transaction request of $4,850 to newly created unverified external wallet address from unusual IP location.",
+  "questions": {
+    "isFraud": {
+      "type": "noul",
+      "instructions": "Does this transaction exhibit strong indicators of unauthorized or fraudulent activity?"
+    }
+  }
+}
+```
+
+#### Normalized Response:
+```json
+{
+  "model": "typesafe/jev-1.13",
+  "latencyMs": 420,
+  "answers": {
+    "isFraud": {
+      "type": "noul",
+      "noul": 0.892,
+      "verdict": true,
+      "percentage": "89.2%"
+    }
+  }
+}
+```
+
+---
+
+### 2.3. Score (Ordinal Rubric Rating)
+
+Evaluates state against an ordered multi-tier rubric (e.g., severity scale, code review rating, product match score) and outputs both the discrete chosen level and the full probability density across all tiers.
+
+#### Request Format:
+```json
+{
+  "state": "The function executes in O(N^2) time due to nested loops over the dataset and lacks input boundary validation.",
+  "questions": {
+    "codeQuality": {
+      "type": "score",
+      "instructions": "Grade the engineering quality of this code implementation based on performance and defensiveness.",
+      "criteria": [
+        "Unacceptable: Major performance bottlenecks and safety flaws",
+        "Poor: Suboptimal algorithmic complexity or missing validations",
+        "Acceptable: Functional but with minor performance trade-offs",
+        "Good: Well-optimized with comprehensive boundary checks",
+        "Excellent: Optimal algorithmic complexity, clean architecture, resilient"
+      ]
+    }
+  }
+}
+```
+
+#### Normalized Response:
+```json
+{
+  "model": "typesafe/jev-1.13",
+  "latencyMs": 460,
+  "answers": {
+    "codeQuality": {
+      "type": "score",
+      "score": 1,
+      "scoreLabel": "Poor: Suboptimal algorithmic complexity or missing validations",
+      "confidence": 0.784,
+      "probabilities": {
+        "Unacceptable: Major performance bottlenecks and safety flaws": 0.182,
+        "Poor: Suboptimal algorithmic complexity or missing validations": 0.784,
+        "Acceptable: Functional but with minor performance trade-offs": 0.034,
+        "Good: Well-optimized with comprehensive boundary checks": 0.000,
+        "Excellent: Optimal algorithmic complexity, clean architecture, resilient": 0.000
+      }
+    }
+  }
+}
+```
+
+---
+
+## 3. Server Architecture & API Contracts
+
+### 3.1. Route Handler (`app/api/decisions/route.ts`)
+
+- **Path**: `POST /api/decisions`
+- **Authentication**: Bearer token via `Authorization: Bearer <key>` header, JSON body `apiKey`, or server-side `OPENROUTER_API_KEY` from `.env`.
+- **Validation**: Schema-level validation using Zod v3.
+- **Security Boundary**: The API server never returns the raw secret key. `GET /api/decisions` returns only a masked preview (`sk-or-v1-••••••••XXXX`).
+
+### 3.2. TypeScript Definitions (`lib/jev/types.ts`)
+
+```typescript
+export type QuestionType = "choice" | "noul" | "score";
+
+export interface ChoiceQuestionDefinition {
+  type: "choice";
+  instructions: string;
+  criteria?: Record<string, string | null> | string[];
+}
+
+export interface NoulQuestionDefinition {
+  type: "noul";
+  instructions: string;
+}
+
+export interface ScoreQuestionDefinition {
+  type: "score";
+  instructions: string;
+  criteria: string[];
+}
+
+export type QuestionDefinition =
+  | ChoiceQuestionDefinition
+  | NoulQuestionDefinition
+  | ScoreQuestionDefinition;
+
+export interface JevDecisionsRequest {
+  model?: string;
+  state: string | Record<string, unknown> | unknown[];
+  questions: Record<string, QuestionDefinition>;
+}
+
+export interface RankedOption {
+  option: string;
+  probability: number;
+  percentage: string;
+  isWinner: boolean;
+}
+
+export interface ChoiceAnswer {
+  type: "choice";
+  choice: string;
+  confidence: number;
+  probabilities: Record<string, number>;
+  rankedOptions: RankedOption[];
+}
+
+export interface NoulAnswer {
+  type: "noul";
+  noul: number; // Probability [0.0, 1.0]
+  verdict: boolean;
+  percentage: string;
+}
+
+export interface ScoreAnswer {
+  type: "score";
+  score: number; // Index of chosen level
+  scoreLabel: string;
+  confidence: number;
+  probabilities: Record<string, number>;
+  legend?: string[];
+}
+
+export type NormalizedAnswer = ChoiceAnswer | NoulAnswer | ScoreAnswer;
+
+export interface NormalizedDecisionsResult {
+  model?: string;
+  answers: Record<string, NormalizedAnswer>;
+  raw?: unknown;
+  latencyMs?: number;
+}
+```
+
+---
+
+## 4. Agentic Workflows & Tool Calling Integration
+
+Autonomous coding agents (such as Claude Code, Cursor, Copilot, Devv) often get stuck in verbose reasoning loops when validating hypotheses or choosing next steps. Jev provides a sub-second decision oracle for autonomous workflows:
+
+### Fast Hypothesis Pruning in Agent Loops
+```typescript
+import { queryJevDecisions } from "@/lib/jev/client";
+
+// Agent validating whether a test failure is caused by environment vs code defect
+const decision = await queryJevDecisions({
+  apiKey: process.env.OPENROUTER_API_KEY,
+  request: {
+    state: {
+      errorMessage: "connect ECONNREFUSED 127.0.0.1:5432",
+      stack: "at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1606:16)",
+      recentDiff: "Modified database connection timeout from 5000 to 10000"
+    },
+    questions: {
+      rootCause: {
+        type: "choice",
+        instructions: "Determine the most probable root cause of this test failure.",
+        criteria: {
+          "Missing Database Service / Local Daemon Down": null,
+          "Code Syntax or Type Regression": null,
+          "Network Firewall or Port Binding Conflict": null,
+          "Flaky Asynchronous Test Assertion": null
+        }
+      }
+    }
+  }
+});
+
+console.log(decision.answers.category.choice);
+// => "Missing Database Service / Local Daemon Down" (Confidence: 99.4%)
+```
+
+---
+
+## 5. Verification & Testing
+
+The repository maintains strict engineering standards:
+- **Unit & Integration Suite**: 41 Vitest tests verifying client serialization, mathematical curves, presets integrity, and Next.js API endpoints.
+- **Coverage**: >80% statement coverage across all core modules.
+- **Static Analysis**: TypeScript 5.8 strict mode + ESLint 9 (0 errors, 0 warnings).
+
+```bash
+# Run unit & integration tests
+npm test
+
+# Run tests with V8 coverage report
+npm run test:coverage
+
+# Lint codebase
+npm run lint
+
+# Production bundle compilation
+npm run build
+```

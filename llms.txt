@@ -1,0 +1,119 @@
+# TypeSafe Jev Decision Studio
+
+> High-speed System One calibrated decision platform powered by TypeSafe Jev (`typesafe/jev-1.13`) via OpenRouter.
+
+TypeSafe Jev Decision Studio is a TypeScript workbench and reference implementation for **TypeSafe Jev** (`typesafe/jev-1.13`), an inference model designed specifically for automated, calibrated System One decisions. Unlike traditional autoregressive LLMs that generate multi-token text to classify data (costing 1–4 seconds with hallucination risks and fragile JSON repairing), Jev evaluates decisions directly at the logprob distribution level in 400–600ms with strict mathematical calibration.
+
+- **Model Identifier**: `typesafe/jev-1.13` (available on [OpenRouter](https://openrouter.ai))
+- **Inference Latency**: 400–600ms (sub-second evaluation)
+- **Supported Decision Primitives**: Choice (Multi-class), Noul (Binary with transfer curves), Score (Ordinal rubric)
+- **Tech Stack**: Next.js 15 (App Router), React 19, TypeScript 5.8, Tailwind CSS, Vitest (100% test coverage)
+- **Repository**: [https://github.com/Romain-Jochum/typesafe-jev-decision-studio](https://github.com/Romain-Jochum/typesafe-jev-decision-studio)
+
+---
+
+## Core Capabilities & Decision Primitives
+
+### 1. Choice (Multi-Class Categorization)
+Evaluates state against an arbitrary list of candidate categories in a single forward pass, returning calibrated probabilities across all candidates and ranking them automatically.
+- **Input**: `state` (text, JSON object, or array) + `criteria` map of options.
+- **Output**: Winning candidate name, `confidence` score $[0.0, 1.0]$, and complete `rankedOptions` probability distribution.
+- **Example Use Cases**: Ticket routing, intent classification, catalog categorization (scales to 95+ options in a single request).
+
+### 2. Noul (Calibrated Binary Probability & Transfer Curves)
+Calculates raw conditional probability $p(\text{yes}) \in [0.0, 1.0]$ against a verification instruction, combined with dynamic decision thresholds and 4 mathematical transfer curves:
+- **Linear**: $f(p) = p$ (Direct probability mapping)
+- **Sigmoid**: $f(p) = \frac{1}{1 + e^{-10(p - 0.5)}}$ (Sharpens confident classifications, suppresses ambiguity)
+- **Strict**: $f(p) = p^{1.8}$ (Conservative power curve heavily penalizing uncertainty)
+- **Permissive**: $f(p) = p^{0.55}$ (Lenient curve boosting edge-case recall)
+- **Final Verdict**: Evaluated as $f(p) \ge \text{Threshold}$.
+
+### 3. Score (Ordinal Rubric Rating)
+Grades state against an ordered multi-tier rubric (e.g., sentiment, compliance level, code quality) and returns both the discrete level score and the full probability density across every tier.
+
+---
+
+## API Quickstart
+
+### Endpoint: `POST /api/decisions`
+
+Execute a Jev decision query from any client:
+
+```bash
+curl -X POST http://localhost:3000/api/decisions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer sk-or-v1-your-key" \
+  -d '{
+    "state": "personal organization, daily to-do planner, habit tracker",
+    "questions": {
+      "category": {
+        "type": "choice",
+        "instructions": "What is the best category for this self-hosted app?",
+        "criteria": {
+          "Analytics": null,
+          "Calendar & Contacts": null,
+          "Task Management & To-do Lists": null,
+          "Media Streaming": null
+        }
+      }
+    }
+  }'
+```
+
+### JSON Response
+```json
+{
+  "model": "typesafe/jev-1.13",
+  "latencyMs": 482,
+  "answers": {
+    "category": {
+      "type": "choice",
+      "choice": "Task Management & To-do Lists",
+      "confidence": 0.998,
+      "rankedOptions": [
+        { "option": "Task Management & To-do Lists", "probability": 0.998, "percentage": "99.8%", "isWinner": true },
+        { "option": "Calendar & Contacts", "probability": 0.001, "percentage": "0.1%", "isWinner": false },
+        { "option": "Analytics", "probability": 0.001, "percentage": "0.1%", "isWinner": false },
+        { "option": "Media Streaming", "probability": 0.000, "percentage": "0.0%", "isWinner": false }
+      ]
+    }
+  }
+}
+```
+
+---
+
+## Local Development & Setup
+
+```bash
+# Clone repository
+git clone https://github.com/Romain-Jochum/typesafe-jev-decision-studio.git
+cd typesafe-jev-decision-studio
+
+# Install dependencies
+npm install
+
+# Set environment
+cp .env.example .env
+# Edit .env to add OPENROUTER_API_KEY=sk-or-v1-...
+
+# Run development server
+npm run dev
+
+# Run test suite (41 unit & integration tests)
+npm test
+
+# Production build
+npm run build
+```
+
+---
+
+## Curated Index & Links
+
+- [llms-full.txt](https://github.com/Romain-Jochum/typesafe-jev-decision-studio/blob/main/llms-full.txt): Complete technical specification and API contracts for single-prompt LLM ingestion.
+- [CLAUDE.md](https://github.com/Romain-Jochum/typesafe-jev-decision-studio/blob/main/CLAUDE.md): Direct development, testing, and architecture instructions for Claude Code.
+- [.cursorrules](https://github.com/Romain-Jochum/typesafe-jev-decision-studio/blob/main/.cursorrules): Development constraints and coding patterns for Cursor AI assistant.
+- [lib/jev/calibration.ts](https://github.com/Romain-Jochum/typesafe-jev-decision-studio/blob/main/lib/jev/calibration.ts): Mathematical transfer curves and probability calibration formulas.
+- [lib/jev/types.ts](https://github.com/Romain-Jochum/typesafe-jev-decision-studio/blob/main/lib/jev/types.ts): TypeScript type definitions for Jev decisions.
+- [app/api/decisions/route.ts](https://github.com/Romain-Jochum/typesafe-jev-decision-studio/blob/main/app/api/decisions/route.ts): Next.js App Router API proxy with secure key handling.

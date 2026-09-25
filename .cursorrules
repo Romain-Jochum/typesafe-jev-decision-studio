@@ -1,0 +1,32 @@
+# TypeSafe Jev Decision Studio — Cursor Rules
+
+You are working on TypeSafe Jev Decision Studio, a Next.js 15 + React 19 + TypeScript workbench for TypeSafe Jev (`typesafe/jev-1.13`) via OpenRouter.
+
+## Core Directives & Engineering Standards
+
+1. **Architecture & Standards**:
+   - Next.js 15 App Router (`app/` directory).
+   - React 19 with strictly typed components and hooks.
+   - TypeScript 5.8 with strict mode enabled; avoid `any`.
+   - Schema validation with Zod for all API boundary inputs.
+   - Vitest for testing with 100% test pass rate required.
+
+2. **Security & Secrets**:
+   - NEVER commit `.env` or `.env*.local`.
+   - Never log or return unmasked API keys. Use `keyPreview` with masking (`sk-or-v1-••••••••XXXX`).
+   - All server-side requests must validate `OPENROUTER_API_KEY` or fallback to simulation if explicitly flagged.
+
+3. **Design System & UI**:
+   - Follow TypeSafe aesthetic: Paper white (`#fefefe`) in light mode, Obsidian (`#0e0d0f`) in dark mode, Emerald (`#10b981`) for winners and success states.
+   - Use `rounded-lg` for card containers, `rounded-md` for buttons/badges. Avoid pill shapes.
+   - Default inputs (`Context`, `Instructions`, `Criteria`) must start empty on initial load, populated only when a preset is chosen.
+   - Preserve explanatory subtitles on form cards.
+
+4. **Testing & Verification**:
+   - Always run tests after making code changes:
+     ```bash
+     npm test
+     npm run lint
+     npm run build
+     ```
+   - Preserve mathematical precision in `lib/jev/calibration.ts`.

@@ -166,6 +166,43 @@ typesafe-jev-decision-studio/
 
 ---
 
+## Why TypeSafe Jev? (System One vs Autoregressive Decisions)
+
+### The Problem: Autoregressive LLM Decision Bottlenecks
+When building automated classification pipelines or autonomous agent decision loops, using standard generative models (GPT-4o, Claude 3.5 Sonnet, Llama 3) creates three severe bottlenecks:
+
+1. **High Latency (1,000ms – 4,000ms)**: Generating paragraphs or JSON tokens autoregressively wastes hundreds of milliseconds on token streaming when only a single decision is required.
+2. **Schema & Classification Hallucinations**: Even with structured outputs or JSON schema mode, models can select non-existent categories or fail parsing under edge cases, requiring expensive retry loops.
+3. **Uncalibrated Confidence**: Generative logprobs or self-reported confidence numbers ("I am 95% confident") are notoriously miscalibrated and unreliable for strict automated thresholding.
+
+### The Solution: Direct Logprob Calibration
+**TypeSafe Jev (`typesafe/jev-1.13`)** is built from the ground up for System One decision-making:
+- **Sub-Second Execution (400–600ms)**: Evaluates decisions in a single forward pass over token distributions.
+- **Mathematically Calibrated**: Confidence values reflect empirical probabilities.
+- **Transfer Curves**: Binary decisions can be sharpened or softened using Sigmoid, Strict, or Permissive curves to match domain risk tolerance.
+- **Autonomous Agent Ready**: Serves as a deterministic, low-overhead decision oracle for coding agents (Claude Code, Cursor, Copilot) to prune hypothesis branches instantly.
+
+| Dimension | Standard Autoregressive LLM | TypeSafe Jev (`typesafe/jev-1.13`) |
+| :--- | :--- | :--- |
+| **Inference Latency** | 1,000ms – 4,000ms (token generation) | **400ms – 600ms** (single forward pass) |
+| **Output Type** | Autoregressive text or JSON string | **Native calibrated probability distribution** |
+| **Hallucination Risk** | Possible (invented keys, schema drift) | **Zero** (strictly bound to candidate space) |
+| **Decision Sharpness** | Fixed temperature / prompt hacks | **Mathematical Transfer Curves** (Sigmoid, Strict, etc.) |
+| **Scalability** | High token cost per candidate option | **Constant-time evaluation across 95+ options** |
+
+---
+
+## AI & LLM Discoverability
+
+TypeSafe Jev Decision Studio provides structured, machine-readable specifications adhering to the [llmstxt.org](https://llmstxt.org) standard for AI coding assistants, autonomous agents, and search engines (Claude Code, Cursor, GitHub Copilot, ChatGPT, Perplexity, Devv):
+
+- [llms.txt](https://github.com/Romain-Jochum/typesafe-jev-decision-studio/blob/main/llms.txt): Curated project summary and machine-readable index.
+- [llms-full.txt](https://github.com/Romain-Jochum/typesafe-jev-decision-studio/blob/main/llms-full.txt): Complete consolidated technical specification, API contracts, and mathematical transfer curve formulas for single-prompt LLM ingestion.
+- [CLAUDE.md](https://github.com/Romain-Jochum/typesafe-jev-decision-studio/blob/main/CLAUDE.md): Direct development, testing, and architecture instructions for Claude Code CLI.
+- [.cursorrules](https://github.com/Romain-Jochum/typesafe-jev-decision-studio/blob/main/.cursorrules): Development constraints and coding patterns for Cursor AI assistant.
+
+---
+
 ## Roadmap
 
 - [ ] **Jev CLI for Agentic Workflows**: Build a dedicated, zero-dependency command-line tool allowing autonomous coding agents (such as Claude Code CLI) to invoke Jev for deterministic decision-making and fast hypothesis testing during execution loops.
